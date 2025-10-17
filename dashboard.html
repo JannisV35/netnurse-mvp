@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NetNurse MV – Pflegedashboard</title>
+<style>
+  * {box-sizing: border-box; margin: 0; padding: 0;}
+  body {font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f6f8fb; height: 100vh; display: flex; flex-direction: column;}
+  
+  header {background: linear-gradient(135deg, #e20074 0%, #c1005f 100%); color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1);}
+  header h2 {font-size: 1.4em; font-weight: 600;}
+  header img {height: 40px;}
+  
+  .container {display: flex; flex: 1; overflow: hidden;}
+  
+  /* Sidebar */
+  .sidebar {width: 320px; background: white; border-right: 1px solid #e0e0e0; display: flex; flex-direction: column; box-shadow: 2px 0 5px rgba(0,0,0,0.05);}
+  .sidebar-header {padding: 20px; border-bottom: 1px solid #e0e0e0;}
+  .sidebar-header h3 {margin-bottom: 12px; color: #333; font-size: 1.1em;}
+  
+  .filter-tabs {display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;}
+  .filter-tab {padding: 6px 12px; border-radius: 20px; background: #f0f0f0; border: none; cursor: pointer; font-size: 0.85em; transition: all 0.2s;}
+  .filter-tab.active {background: #e20074; color: white;}
+  .filter-tab:hover {transform: translateY(-1px);}
+  
+  .search-box {width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9em; transition: border 0.2s;}
+  .search-box:focus {outline: none; border-color: #e20074;}
+  
+  .patient-list {flex: 1; overflow-y: auto; padding: 10px;}
+  .patient-card {background: white; padding: 14px; margin-bottom: 10px; border-radius: 10px; cursor: pointer; border: 2px solid transparent; transition: all 0.2s; position: relative;}
+  .patient-card:hover {border-color: #e20074; box-shadow: 0 3px 12px rgba(226,0,116,0.15);}
+  .patient-card.active {border-color: #e20074; background: #fff5fb;}
+  .patient-card.alarm {border-left: 4px solid #ff4444;}
+  .patient-card.warning {border-left: 4px solid #ff9800;}
+  
+  .patient-header {display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;}
+  .patient-name {font-weight: 600; color: #333; font-size: 1em;}
+  .patient-id {font-size: 0.75em; color: #999; margin-top: 2px;}
+  .compliance-badge {padding: 3px 8px; border-radius: 12px; font-size: 0.75em; font-weight: 600;}
+  .compliance-high {background: #e8f5e9; color: #2e7d32;}
+  .compliance-medium {background: #fff3e0; color: #f57c00;}
+  .compliance-low {background: #ffebee; color: #c62828;}
+  
+  .patient-meta {display: flex; gap: 12px; font-size: 0.8em; color: #666; margin-top: 8px;}
+  .patient-meta span {display: flex; align-items: center; gap: 4px;}
+  
+  .alarm-indicator {position: absolute; top: 10px; right: 10px; width: 10px; height: 10px; border-radius: 50%; animation: pulse 2s infinite;}
+  .alarm-indicator.critical {background: #ff4444;}
+  .alarm-indicator.warning {background: #ff9800;}
+  
+  @keyframes pulse {
+    0%, 100% {opacity: 1;}
+    50% {opacity: 0.4;}
+  }
+  
+  /* Main Content */
+  .main {flex: 1; display: flex; flex-direction: column; background: #f6f8fb;}
+  
+  .chat-header {background: white; border-bottom: 1px solid #e0e0e0; padding: 20px 25px; display: flex; justify-content: space-between; align-items: center;}
+  .chat-header-left h3 {margin-bottom: 5px; color: #333; font-size: 1.3em;}
+  .chat-header-left .status {display: flex; align-items: center; gap: 8px; font-size: 0.85em; color: #666;}
+  .status-dot {width: 8px; height: 8px; border-radius: 50%;}
+  .status-active {background: #4caf50;}
+  .status-inactive {background: #ff9800;}
+  .status-completed {background: #999;}
+  
+  .action-buttons {display: flex; gap: 10px;}
+  .action-btn {background: white; border: 1px solid #e0e0e0; color: #333; padding: 8px 16px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 0.9em; transition: all 0.2s;}
+  .action-btn:hover {background: #e20074; color: white; border-color: #e20074;}
+  .action-btn.primary {background: #e20074; color: white; border-color: #e20074;}
+  .action-btn.primary:hover {background: #c1005f;}
+  
+  /* Tabs */
+  .content-tabs {display: flex; background: white; border-bottom: 1px solid #e0e0e0; padding: 0 25px;}
+  .tab {padding: 15px 20px; cursor: pointer; border-bottom: 3px solid transparent; color: #666; font-weight: 500; transition: all 0.2s;}
+  .tab:hover {color: #e20074;}
+  .tab.active {color: #e20074; border-bottom-color: #e20074;}
+  
+  /* Content Area */
+  .content-area {flex: 1; display: flex; overflow: hidden;}
+  .tab-content {display: none; flex: 1; overflow-y: auto;}
+  .tab-content.active {display: flex; flex-direction: column;}
+  
+  /* Chat Window */
+  .chat-window {flex: 1; padding: 25px; overflow-y: auto;}
+  .message {margin-bottom: 16px; max-width: 65%; padding: 12px 16px; border-radius: 12px; position: relative; animation: fadeIn 0.3s;}
+  .from-patient {background: white; border: 1px solid #e0e0e0; align-self: flex-start; margin-right: auto;}
+  .from-nurse {background: linear-gradient(135deg, #e20074 0%, #c1005f 100%); color: white; align-self: flex-end; margin-left: auto;}
+  .message-header {display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-weight: 600; font-size: 0.9em;}
+  .message-text {line-height: 1.5;}
+  .timestamp {font-size: 0.75em; opacity: 0.7; margin-top: 6px; text-align: right;}
+  .message-image {max-width: 200px; border-radius: 8px; margin-top: 8px; cursor: pointer; transition: transform 0.2s;}
+  .message-image:hover {transform: scale(1.05);}
+  .category-badge {padding: 2px 8px; border-radius: 10px; font-size: 0.75em; background: rgba(255,255,255,0.2);}
+  
+  @keyframes fadeIn {
+    from {opacity: 0; transform: translateY(10px);}
+    to {opacity: 1; transform: translateY(0);}
+  }
+  
+  .chat-footer {padding: 20px 25px; background: white; border-top: 1px solid #e0e0e0; display: flex; gap: 12px; align-items: center;}
+  .upload-section {display: flex; gap: 8px; align-items: center;}
+  .upload-btn {padding: 10px 16px; background: #f5f5f5; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; font-size: 0.9em; transition: all 0.2s;}
+  .upload-btn:hover {background: #e0e0e0;}
+  #categorySelect {padding: 8px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9em;}
+  .message-input {flex: 1; padding: 12px 16px; border: 1px solid #ddd; border-radius: 25px; font-size: 0.95em; transition: border 0.2s;}
+  .message-input:focus {outline: none; border-color: #e20074;}
+  .send-btn {background: #e20074; color: white; border: none; padding: 12px 24px; border-radius: 25px; cursor: pointer; font-weight: 600; transition: all 0.2s;}
+  .send-btn:hover {background: #c1005f; transform: translateY(-1px);}
+  
+  /* Tasks Tab */
+  .tasks-container {padding: 25px;}
+  .task-card {background: white; padding: 16px; margin-bottom: 12px; border-radius: 10px; border-left: 4px solid #ddd; display: flex; justify-content: space-between; align-items: center; transition: all 0.2s;}
+  .task-card:hover {box-shadow: 0 2px 8px rgba(0,0,0,0.1);}
+  .task-card.completed {border-left-color: #4caf50; opacity: 0.7;}
+  .task-card.due-soon {border-left-color: #ff9800;}
+  .task-card.overdue {border-left-color: #ff4444;}
+  .task-info h4 {margin-bottom: 4px; color: #333;}
+  .task-meta {font-size: 0.85em; color: #666; display: flex; gap: 12px; margin-top: 4px;}
+  .task-status {padding: 4px 12px; border-radius: 12px; font-size: 0.8em; font-weight: 600;}
+  
+  /* Stats Tab */
+  .stats-container {padding: 25px;}
+  .stats-grid {display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px;}
+  .stat-card {background: white; padding: 20px; border-radius: 12px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.05);}
+  .stat-value {font-size: 2.5em; font-weight: 700; color: #e20074; margin-bottom: 8px;}
+  .stat-label {color: #666; font-size: 0.9em;}
+  .progress-bar {width: 100%; height: 8px; background: #f0f0f0; border-radius: 10px; overflow: hidden; margin-top: 12px;}
+  .progress-fill {height: 100%; background: linear-gradient(90deg, #4caf50 0%, #8bc34a 100%); transition: width 0.3s;}
+  
+  /* Info Panel */
+  .info-panel {width: 320px; background: white; border-left: 1px solid #e0e0e0; padding: 25px; overflow-y: auto;}
+  .info-section {margin-bottom: 25px;}
+  .info-section h4 {color: #e20074; margin-bottom: 12px; font-size: 1em; display: flex; align-items: center; gap: 8px;}
+  .info-row {margin-bottom: 10px; font-size: 0.9em;}
+  .info-row strong {color: #333; display: inline-block; width: 120px;}
+  .info-row span {color: #666;}
+  .notes-textarea {width: 100%; min-height: 100px; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-family: inherit; font-size: 0.9em; resize: vertical;}
+  .notes-textarea:focus {outline: none; border-color: #e20074;}
+  .save-notes-btn {width: 100%; padding: 10px; background: #e20074; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; margin-top: 10px;}
+  .save-notes-btn:hover {background: #c1005f;}
+  
+  /* Modal */
+  .modal {display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;}
+  .modal.active {display: flex;}
+  .modal-content {background: white; border-radius: 16px; padding: 30px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(0,0,0,0.3); animation: modalSlideIn 0.3s;}
+  .modal-header {display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;}
+  .modal-header h3 {color: #333; font-size: 1.4em;}
+  .close-modal {background: none; border: none; font-size: 1.5em; cursor: pointer; color: #999; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;}
+  .close-modal:hover {color: #333;}
+  .modal-body {line-height: 1.6;}
+  .modal-body video {width: 100%; border-radius: 12px; margin: 20px 0;}
+  .modal-footer {margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;}
+  .modal-btn {padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; transition: all 0.2s;}
+  .modal-btn.primary {background: #e20074; color: white;}
+  .modal-btn.primary:hover {background: #c1005f;}
+  .modal-btn.secondary {background: #f0f0f0; color: #333;}
+  .modal-btn.secondary:hover {background: #e0e0e0;}
+  
+  @keyframes modalSlideIn {
+    from {transform: translateY(-50px); opacity: 0;}
+    to {transform: translateY(0); opacity: 1;}
+  }
+  
+  .empty-state {text-align: center; padding: 60px 20px; color: #999;}
+  .empty-state-icon {font-size: 4em; margin-bottom: 20px; opacity: 0.3;}
+  
+  /* Responsive */
+  @media (max-width: 1024px) {
+    .info-panel {display: none;}
+  }
+  
+  @media (max-width: 768px) {
+    .sidebar {width: 280px; position: absolute; left: -280px; z-index: 100; transition: left 0.3s; height: 100%;}
+    .sidebar.open {left: 0;}
+    .container {position: relative;}
+    .action-buttons {flex-wrap: wrap;}
+    .action-btn {padding: 6px 12px; font-size: 0.85em;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h2>🏥 NetNurse MV – Pflegedashboard</h2>
+  <img src="https://upload.wikimedia.org/wikipedia/de/5/55/Universit%C3%A4tsmedizin_Rostock_logo.svg" alt="UMR Logo">
+</header>
+
+<div class="container">
+  <!-- Sidebar -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <h3>Patienten</h3>
+      <div class="filter-tabs">
+        <button class="filter-tab active" data-filter="all">Alle</button>
+        <button class="filter-tab" data-filter="alarm">🚨 Alarme</button>
+        <button class="filter-tab" data-filter="low-compliance">📉 Low Compliance</button>
+        <button class="filter-tab" data-filter="inactive">⏰ Inaktiv</button>
+      </div>
+      <input type="text" class="search-box" id="searchBox" placeholder="🔍 Patient suchen...">
+    </div>
+    <div class="patient-list" id="patientList"></div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main">
+    <div class="chat-header">
+      <div class="chat-header-left">
+        <h3 id="patientName">Patient auswählen</h3>
+        <div class="status">
+          <span class="status-dot" id="statusDot"></span>
+          <span id="patientStatus">Wählen Sie einen Patienten</span>
+        </div>
+      </div>
+      <div class="action-buttons" id="actionButtons" style="display: none;">
+        <button class="action-btn" id="phoneBtn">📞 Anruf</button>
+        <button class="action-btn" id="videoBtn">📹 Video</button>
+        <button class="action-btn" id="archiveBtn">📁 Archiv</button>
+      </div>
+    </div>
+
+    <div class="content-tabs">
+      <div class="tab active" data-tab="chat">💬 Chat</div>
+      <div class="tab" data-tab="tasks">✅ Aufgaben</div>
+      <div class="tab" data-tab="stats">📊 Statistiken</div>
+    </div>
+
+    <div class="content-area">
+      <!-- Chat Tab -->
+      <div class="tab-content active" id="chatTab">
+        <div class="chat-window" id="chatWindow">
+          <div class="empty-state">
+            <div class="empty-state-icon">💬</div>
+            <p>Wählen Sie einen Patienten aus der Liste</p>
+          </div>
+        </div>
+        <div class="chat-footer" id="chatFooter" style="display: none;">
+          <div class="upload-section">
+            <label for="fileUpload" class="upload-btn">📎 Datei</label>
+            <input type="file" id="fileUpload" style="display: none;" accept="image/*,.pdf">
+            <select id="categorySelect">
+              <option value="general">Allgemein</option>
+              <option value="wound">Wunde</option>
+              <option value="medication">Medikamente</option>
+              <option value="document">Dokumente</option>
+            </select>
+          </div>
+          <input type="text" class="message-input" id="messageInput" placeholder="Nachricht eingeben...">
+          <button class="send-btn" id="sendBtn">Senden</button>
+        </div>
+      </div>
+
+      <!-- Tasks Tab -->
+      <div class="tab-content" id="tasksTab">
+        <div class="tasks-container" id="tasksContainer"></div>
+      </div>
+
+      <!-- Stats Tab -->
+      <div class="tab-content" id="statsTab">
+        <div class="stats-container" id="statsContainer"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Info Panel -->
+  <div class="info-panel" id="infoPanel" style="display: none;">
+    <div class="info-section">
+      <h4>🩺 Patienteninfo</h4>
+      <div class="info-row"><strong>Patient-ID:</strong> <span id="infoId">-</span></div>
+      <div class="info-row"><strong>Diagnose:</strong> <span id="infoDiagnose">-</span></div>
+      <div class="info-row"><strong>Entlassdatum:</strong> <span id="infoEntlass">-</span></div>
+      <div class="info-row"><strong>Pflegekraft:</strong> <span id="infoPflege">-</span></div>
+    </div>
+    <div class="info-section">
+      <h4>📝 Notizen</h4>
+      <textarea class="notes-textarea" id="notesArea" placeholder="Interne Dokumentation, Abrechnungsnotizen..."></textarea>
+      <button class="save-notes-btn" id="saveNotesBtn">Notizen speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modals -->
+<div class="modal" id="videoModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>📹 Videoanruf</h3>
+      <button class="close-modal" onclick="closeModal('videoModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <p>Verbindung zu <strong id="videoPatientName"></strong> wird hergestellt...</p>
+      <video autoplay muted loop>
+        <source src="https://video-previews.elements.envatousercontent.com/4eec503b-c193-4b4d-821a-cb232bcebdfc/watermarked_preview/watermarked_preview.mp4" type="video/mp4">
+      </video>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn secondary" onclick="closeModal('videoModal')">Beenden</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="phoneModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>📞 Telefonanruf</h3>
+      <button class="close-modal" onclick="closeModal('phoneModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <p style="text-align: center; padding: 40px 0;">
+        <span style="font-size: 3em;">☎️</span><br><br>
+        Verbindung zu <strong id="phonePatientName"></strong>...<br>
+        <small style="color: #999;">Bitte warten Sie auf Annahme</small>
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn secondary" onclick="closeModal('phoneModal')">Auflegen</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="archiveModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>📁 Patientenarchiv</h3>
+      <button class="close-modal" onclick="closeModal('archiveModal')">×</button>
+    </div>
+    <div class="modal-body" id="archiveContent"></div>
+    <div class="modal-footer">
+      <button class="modal-btn secondary" onclick="closeModal('archiveModal')">Schließen</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// Data Storage
+const patients = {
+  'P001': {
+    id: 'P001',
+    name: 'Maria Müller',
+    diagnose: 'Exsikkose',
+    entlass: '14.10.2025',
+    pflege: 'A. Pausa',
+    status: 'active',
+    lastInteraction: new Date('2025-10-17T09:30:00'),
+    compliance: 85,
+    hasAlarm: false,
+    messages: [
+      {sender: 'patient', text: 'Guten Tag, ich möchte Ihnen wie besprochen mein Trinkprotokoll übersenden.', time: '2025-10-14T08:42:00', category: 'general'},
+      {sender: 'nurse', text: 'Bitte senden Sie uns das Protokoll zur Beurteilung.', time: '2025-10-14T08:45:00'},
+      {sender: 'patient', text: 'Hier das Protokoll von heute Morgen:', image: 'https://cdn.pflege.de/bilder/miktionsprotokoll-trinkprotokoll-small-1-770x350.webp', time: '2025-10-14T08:50:00', category: 'document'},
+      {sender: 'nurse', text: 'Vielen Dank. Bitte trinken Sie täglich mindestens 1500ml.', time: '2025-10-14T09:00:00'}
+    ],
+    tasks: [
+      {id: 1, title: 'Medikation einnehmen', due: '2025-10-17T08:00:00', completed: true, type: 'medication'},
+      {id: 2, title: 'Trinkprotokoll führen', due: '2025-10-17T12:00:00', completed: true, type: 'monitoring'},
+      {id: 3, title: 'Körpergewicht messen', due: '2025-10-17T18:00:00', completed: false, type: 'measurement'},
+      {id: 4, title: 'Befinden-Fragebogen', due: '2025-10-18T09:00:00', completed: false, type: 'survey'}
+    ],
+    notes: ''
+  },
+  'P002': {
+    id: 'P002',
+    name: 'Karl Schmidt',
+    diagnose: 'Hypertonie',
+    entlass: '15.10.2025',
+    pflege: 'M. Weber',
+    status: 'inactive',
+    lastInteraction: new Date('2025-10-15T07:22:00'),
+    compliance: 42,
+    hasAlarm: true,
+    messages: [
+      {sender: 'patient', text: 'Ich habe wieder Schwindel.', time: '2025-10-15T07:22:00', category: 'general'},
+      {sender: 'nurse', text: 'Wurde heute Blutdruck gemessen?', time: '2025-10-15T07:25:00'}
+    ],
+    tasks: [
+      {id: 1, title: 'Blutdruck messen', due: '2025-10-16T08:00:00', completed: false, type: 'measurement'},
+      {id: 2, title: 'Medikation einnehmen', due: '2025-10-16T08:00:00', completed: false, type: 'medication'},
+      {id: 3, title: 'Werte dokumentieren', due: '2025-10-16T20:00:00', completed: false, type: 'monitoring'}
+    ],
+    notes: 'Patient inaktiv seit 2 Tagen - Rückruf erforderlich'
+  },
+  'P003': {
+    id: 'P003',
+    name: 'Petra Bauer',
+    diagnose: 'Diabetes Typ 2',
+    entlass: '10.10.2025',
+    pflege: 'S. Klein',
+    status: 'completed',
+    lastInteraction: new Date('2025-10-15T10:05:00'),
+    compliance: 95,
+    hasAlarm: false,
+    messages: [
+      {sender: 'patient', text: 'Hier mein Blutzucker: 125 mg/dl', time: '2025-10-15T10:00:00', category: 'measurement'},
+      {sender: 'nurse', text: 'Sehr gut, bitte weiter dokumentieren.', time: '2025-10-15T10:05:00'}
+    ],
+    tasks: [
+      {id: 1, title: 'Blutzucker messen', due: '2025-10-15T08:00:00', completed: true, type: 'measurement'},
+      {id: 2, title: 'Insulingabe', due: '2025-10-15T08:30:00', completed: true, type: 'medication'},
+      {id: 3, title: 'Ernährungstagebuch', due: '2025-10-15T20:00:00', completed: true, type: 'monitoring'}
+    ],
+    notes: 'Betreuung erfolgreich abgeschlossen'
+  },
+  'P004': {
+    id: 'P004',
+    name: 'Hans Meier',
+    diagnose: 'Herzinsuffizienz',
+    entlass: '16.10.2025',
+    pflege: 'A. Pausa',
+    status: 'active',
+    lastInteraction: new Date('2025-10-17T07:15:00'),
+    compliance: 68,
+    hasAlarm: true,
+    messages: [
+      {sender: 'patient', text: 'Ich habe Atemnot beim Treppensteigen.', time: '2025-10-17T07:15:00', category: 'general'},
+      {sender: 'nurse', text: 'Bitte messen Sie Ihren Blutdruck und Puls. Haben Sie die Medikamente genommen?', time: '2025-10-17T07:20:00'}
+    ],
+    tasks: [
+      {id: 1, title: 'Medikation einnehmen', due: '2025-10-17T08:00:00', completed: true, type: 'medication'},
+      {id: 2, title: 'Gewicht kontrollieren', due: '2025-10-17T08:00:00', completed: false, type: 'measurement'},
+      {id: 3, title: 'Flüssigkeitsbilanz', due: '2025-10-17T20:00:00', completed: false, type: 'monitoring'}
+    ],
+    notes: 'Kritische Symptome - engmaschige Überwachung'
+  }
+};
+
+let currentPatientId = null;
+let currentFilter = 'all';
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+  loadFromStorage();
+  renderPatientList();
+  initEventListeners();
+});
+
+// Event Listeners
+function initEventListeners() {
+  // Filter tabs
+  document.querySelectorAll('.filter-tab').forEach(tab => {
+    tab.addEventListener('click', (e) => {
+      document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+      e.target.classList.add('active');
+      currentFilter = e.target.dataset.filter;
+      renderPatientList();
+    });
+  });
+
+  // Search
+  document.getElementById('searchBox').addEventListener('input', (e) => {
+    renderPatientList(e.target.value);
+  });
+
+  // Content tabs
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', (e) => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      e.target.classList.add('active');
+      const tabName = e.target.dataset.tab;
+      document.getElementById(tabName + 'Tab').classList.add('active');
+      
+      if (currentPatientId) {
+        if (tabName === 'tasks') renderTasks();
+        if (tabName === 'stats') renderStats();
+      }
+    });
+  });
+
+  // Send message
+  document.getElementById('sendBtn').addEventListener('click', sendMessage);
+  document.getElementById('messageInput').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') sendMessage();
+  });
+
+  // File upload
+  document.getElementById('fileUpload').addEventListener('change', handleFileUpload);
+
+  // Action buttons
+  document.getElementById('phoneBtn').addEventListener('click', () => openModal('phoneModal'));
+  document.getElementById('videoBtn').addEventListener('click', () => openModal('videoModal'));
+  document.getElementById('archiveBtn').addEventListener('click', showArchive);
+
+  // Save notes
+  document.getElementById('saveNotesBtn').addEventListener('click', saveNotes);
+
+  // Close modals on background click
+  document.querySelectorAll('.modal').forEach(modal => {
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeModal(modal.id);
+    });
+  });
+
+  // ESC to close modals
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.modal.active').forEach(modal => {
+        closeModal(modal.id);
+      });
+    }
+  });
+}
+
+// Render Patient List
+function renderPatientList(searchTerm = '') {
+  const list = document.getElementById('patientList');
+  list.innerHTML = '';
+
+  const filtered = Object.values(patients).filter(p => {
+    const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          p.id.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesFilter = 
+      currentFilter === 'all' ||
+      (currentFilter === 'alarm' && p.hasAlarm) ||
+      (currentFilter === 'low-compliance' && p.compliance < 50) ||
+      (currentFilter === 'inactive' && isInactive(p));
+    return matchesSearch && matchesFilter;
+  });
+
+  filtered.forEach(patient => {
+    const card = document.createElement('div');
+    card.className = 'patient-card';
+    if (patient.id === currentPatientId) card.classList.add('active');
+    if (patient.hasAlarm) card.classList.add('alarm');
+    if (patient.compliance < 50) card.classList.add('warning');
+
+    const complianceClass = patient.compliance >= 70 ? 'compliance-high' : 
+                           patient.compliance >= 50 ? 'compliance-medium' : 'compliance-low';
+
+    card.innerHTML = `
+      <div class="patient-header">
+        <div>
+          <div class="patient-name">${patient.name}</div>
+          <div class="patient-id">ID: ${patient.id}</div>
+        </div>
+        <div class="compliance-badge ${complianceClass}">${patient.compliance}%</div>
+      </div>
+      <div class="patient-meta">
+        <span>🕒 ${formatRelativeTime(patient.lastInteraction)}</span>
+        <span>${getStatusIcon(patient.status)} ${getStatusText(patient.status)}</span>
+      </div>
+      ${patient.hasAlarm ? '<div class="alarm-indicator critical"></div>' : ''}
+      ${isInactive(patient) ? '<div class="alarm-indicator warning"></div>' : ''}
+    `;
+
+    card.addEventListener('click', () => selectPatient(patient.id));
+    list.appendChild(card);
+  });
+
+  if (filtered.length === 0) {
+    list.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">Keine Patienten gefunden</div>';
+  }
+}
+
+// Select Patient
+function selectPatient(patientId) {
+  currentPatientId = patientId;
+  const patient = patients[patientId];
+
+  // Update header
+  document.getElementById('patientName').textContent = patient.name;
+  document.getElementById('patientStatus').textContent = getStatusText(patient.status);
+  const statusDot = document.getElementById('statusDot');
+  statusDot.className = 'status-dot';
+  if (patient.status === 'active') statusDot.classList.add('status-active');
+  else if (patient.status === 'inactive') statusDot.classList.add('status-inactive');
+  else statusDot.classList.add('status-completed');
+
+  // Show action buttons
+  document.getElementById('actionButtons').style.display = 'flex';
+  document.getElementById('chatFooter').style.display = 'flex';
+  document.getElementById('infoPanel').style.display = 'block';
+
+  // Update info panel
+  document.getElementById('infoId').textContent = patient.id;
+  document.getElementById('infoDiagnose').textContent = patient.diagnose;
+  document.getElementById('infoEntlass').textContent = patient.entlass;
+  document.getElementById('infoPflege').textContent = patient.pflege;
+  document.getElementById('notesArea').value = patient.notes || '';
+
+  // Render content
+  renderMessages();
+  renderPatientList();
+
+  // Switch to chat tab
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.querySelector('.tab[data-tab="chat"]').classList.add('active');
+  document.getElementById('chatTab').classList.add('active');
+}
+
+// Render Messages
+function renderMessages() {
+  const chatWindow = document.getElementById('chatWindow');
+  chatWindow.innerHTML = '';
+  
+  const patient = patients[currentPatientId];
+  if (!patient || !patient.messages) return;
+
+  patient.messages.forEach(msg => {
+    const div = document.createElement('div');
+    div.className = `message ${msg.sender === 'patient' ? 'from-patient' : 'from-nurse'}`;
+    
+    const icon = msg.sender === 'patient' ? '👤' : '👨‍⚕️';
+    const categoryBadge = msg.category ? 
+      `<span class="category-badge">${getCategoryIcon(msg.category)} ${getCategoryName(msg.category)}</span>` : '';
+    
+    div.innerHTML = `
+      <div class="message-header">${icon} ${msg.sender === 'patient' ? patient.name : 'Pflegekraft'} ${categoryBadge}</div>
+      <div class="message-text">${msg.text}</div>
+      ${msg.image ? `<img src="${msg.image}" class="message-image" alt="Anhang">` : ''}
+      <div class="timestamp">${formatDateTime(msg.time)}</div>
+    `;
+    
+    chatWindow.appendChild(div);
+  });
+
+  chatWindow.scrollTop = chatWindow.scrollHeight;
+}
+
+// Send Message
+function sendMessage() {
+  const input = document.getElementById('messageInput');
+  const text = input.value.trim();
+  if (!text || !currentPatientId) return;
+
+  const patient = patients[currentPatientId];
+  const message = {
+    sender: 'nurse',
+    text: text,
+    time: new Date().toISOString(),
+    category: 'general'
+  };
+
+  patient.messages.push(message);
+  patient.lastInteraction = new Date();
+  
+  saveToStorage();
+  renderMessages();
+  renderPatientList();
+  
+  input.value = '';
+}
+
+// Handle File Upload
+function handleFileUpload(e) {
+  const file = e.target.files[0];
+  if (!file || !currentPatientId) return;
+
+  const category = document.getElementById('categorySelect').value;
+  const patient = patients[currentPatientId];
+  
+  const message = {
+    sender: 'patient',
+    text: `Datei hochgeladen: ${file.name}`,
+    time: new Date().toISOString(),
+    category: category,
+    image: file.type.startsWith('image/') ? URL.createObjectURL(file) : null
+  };
+
+  patient.messages.push(message);
+  patient.lastInteraction = new Date();
+  
+  saveToStorage();
+  renderMessages();
+  renderPatientList();
+  
+  e.target.value = '';
+}
+
+// Render Tasks
+function renderTasks() {
+  const container = document.getElementById('tasksContainer');
+  const patient = patients[currentPatientId];
+  
+  if (!patient || !patient.tasks || patient.tasks.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✅</div><p>Keine Aufgaben vorhanden</p></div>';
+    return;
+  }
+
+  container.innerHTML = '';
+  
+  patient.tasks.forEach(task => {
+    const dueDate = new Date(task.due);
+    const now = new Date();
+    const isOverdue = dueDate < now && !task.completed;
+    const isDueSoon = dueDate - now < 3600000 && dueDate > now && !task.completed; // 1 hour
+    
+    const card = document.createElement('div');
+    card.className = 'task-card';
+    if (task.completed) card.classList.add('completed');
+    else if (isOverdue) card.classList.add('overdue');
+    else if (isDueSoon) card.classList.add('due-soon');
+    
+    const statusClass = task.completed ? 'compliance-high' : isOverdue ? 'compliance-low' : 'compliance-medium';
+    const statusText = task.completed ? '✓ Erledigt' : isOverdue ? '⚠ Überfällig' : isDueSoon ? '⏰ Bald fällig' : '⏳ Geplant';
+    
+    card.innerHTML = `
+      <div class="task-info">
+        <h4>${task.title}</h4>
+        <div class="task-meta">
+          <span>${getTaskIcon(task.type)} ${getTaskTypeName(task.type)}</span>
+          <span>🕒 ${formatDateTime(task.due)}</span>
+        </div>
+      </div>
+      <div class="task-status ${statusClass}">${statusText}</div>
+    `;
+    
+    container.appendChild(card);
+  });
+}
+
+// Render Stats
+function renderStats() {
+  const container = document.getElementById('statsContainer');
+  const patient = patients[currentPatientId];
+  
+  if (!patient) return;
+
+  const completedTasks = patient.tasks.filter(t => t.completed).length;
+  const totalTasks = patient.tasks.length;
+  const messageCount = patient.messages.length;
+  const daysSinceDischarge = Math.floor((new Date() - new Date(patient.entlass)) / 86400000);
+
+  container.innerHTML = `
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value">${patient.compliance}%</div>
+        <div class="stat-label">Compliance Rate</div>
+        <div class="progress-bar">
+          <div class="progress-fill" style="width: ${patient.compliance}%"></div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${completedTasks}/${totalTasks}</div>
+        <div class="stat-label">Erledigte Aufgaben</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${messageCount}</div>
+        <div class="stat-label">Nachrichten</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${daysSinceDischarge}</div>
+        <div class="stat-label">Tage seit Entlassung</div>
+      </div>
+    </div>
+    <div class="info-section">
+      <h4>📈 Aktivitätsverlauf</h4>
+      <p style="color: #666; line-height: 1.6;">
+        <strong>Letzte Interaktion:</strong> ${formatDateTime(patient.lastInteraction)}<br>
+        <strong>Status:</strong> ${getStatusText(patient.status)}<br>
+        <strong>Alarm-Status:</strong> ${patient.hasAlarm ? '🚨 Aktiv' : '✓ Keine Alarme'}<br>
+        ${isInactive(patient) ? '<span style="color: #ff4444;">⚠ Patient inaktiv seit über 24h</span>' : ''}
+      </p>
+    </div>
+  `;
+}
+
+// Save Notes
+function saveNotes() {
+  if (!currentPatientId) return;
+  const notes = document.getElementById('notesArea').value;
+  patients[currentPatientId].notes = notes;
+  saveToStorage();
+  
+  const btn = document.getElementById('saveNotesBtn');
+  btn.textContent = '✓ Gespeichert';
+  btn.style.background = '#4caf50';
+  setTimeout(() => {
+    btn.textContent = 'Notizen speichern';
+    btn.style.background = '#e20074';
+  }, 2000);
+}
+
+// Show Archive
+function showArchive() {
+  if (!currentPatientId) return;
+  const patient = patients[currentPatientId];
+  
+  const archiveContent = document.getElementById('archiveContent');
+  archiveContent.innerHTML = `
+    <h4>Archivierte Dokumente für ${patient.name}</h4>
+    <ul style="list-style: none; padding: 20px 0;">
+      <li style="padding: 12px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
+        <span>📄 Entlassungsbericht</span>
+        <small style="color: #999;">${patient.entlass}</small>
+      </li>
+      <li style="padding: 12px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
+        <span>📊 Pflegeplanung</span>
+        <small style="color: #999;">${patient.entlass}</small>
+      </li>
+      <li style="padding: 12px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
+        <span>🖼️ Wunddokumentation</span>
+        <small style="color: #999;">${formatDateTime(patient.lastInteraction)}</small>
+      </li>
+      <li style="padding: 12px; display: flex; justify-content: space-between; align-items: center;">
+        <span>📞 Telefonnotizen</span>
+        <small style="color: #999;">${formatDateTime(patient.lastInteraction)}</small>
+      </li>
+    </ul>
+  `;
+  
+  openModal('archiveModal');
+}
+
+// Modal Functions
+function openModal(modalId) {
+  const modal = document.getElementById(modalId);
+  modal.classList.add('active');
+  
+  if (modalId === 'videoModal' && currentPatientId) {
+    document.getElementById('videoPatientName').textContent = patients[currentPatientId].name;
+  }
+  if (modalId === 'phoneModal' && currentPatientId) {
+    document.getElementById('phonePatientName').textContent = patients[currentPatientId].name;
+  }
+}
+
+function closeModal(modalId) {
+  document.getElementById(modalId).classList.remove('active');
+}
+
+// Helper Functions
+function isInactive(patient) {
+  const hoursSince = (new Date() - new Date(patient.lastInteraction)) / 3600000;
+  return hoursSince > 24;
+}
+
+function getStatusIcon(status) {
+  return status === 'active' ? '🟢' : status === 'inactive' ? '🟠' : '⚪';
+}
+
+function getStatusText(status) {
+  return status === 'active' ? 'Aktiv in Betreuung' : 
+         status === 'inactive' ? 'Inaktiv' : 'Abgeschlossen';
+}
+
+function getCategoryIcon(category) {
+  const icons = {
+    general: '💬',
+    wound: '🩹',
+    medication: '💊',
+    document: '📄',
+    measurement: '📊'
+  };
+  return icons[category] || '💬';
+}
+
+function getCategoryName(category) {
+  const names = {
+    general: 'Allgemein',
+    wound: 'Wunde',
+    medication: 'Medikamente',
+    document: 'Dokument',
+    measurement: 'Messung'
+  };
+  return names[category] || 'Allgemein';
+}
+
+function getTaskIcon(type) {
+  const icons = {
+    medication: '💊',
+    measurement: '📊',
+    monitoring: '📋',
+    survey: '📝'
+  };
+  return icons[type] || '✅';
+}
+
+function getTaskTypeName(type) {
+  const names = {
+    medication: 'Medikation',
+    measurement: 'Messung',
+    monitoring: 'Überwachung',
+    survey: 'Umfrage'
+  };
+  return names[type] || 'Aufgabe';
+}
+
+function formatDateTime(date) {
+  const d = new Date(date);
+  return d.toLocaleString('de-DE', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+function formatRelativeTime(date) {
+  const seconds = Math.floor((new Date() - new Date(date)) / 1000);
+  if (seconds < 60) return 'Gerade eben';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `vor ${minutes} Min.`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `vor ${hours} Std.`;
+  const days = Math.floor(hours / 24);
+  return `vor ${days} Tag${days > 1 ? 'en' : ''}`;
+}
+
+// Storage Functions
+function saveToStorage() {
+  try {
+    localStorage.setItem('netnurse_patients', JSON.stringify(patients));
+  } catch (e) {
+    console.warn('LocalStorage nicht verfügbar:', e);
+  }
+}
+
+function loadFromStorage() {
+  try {
+    const stored = localStorage.getItem('netnurse_patients');
+    if (stored) {
+      const loaded = JSON.parse(stored);
+      Object.assign(patients, loaded);
+    }
+  } catch (e) {
+    console.warn('Fehler beim Laden:', e);
+  }
+}
+</script>
+
+</body>
+</html>
